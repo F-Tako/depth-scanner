@@ -13,19 +13,35 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
       - name: Install CPU deps
         run: |
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install diffusers transformers accelerate opencv-python-headless Pillow tqdm tkinterdnd2
           pip install pyinstaller
+
       - name: Build GUI exe (CPU)
-        run: pyinstaller --onefile --name depth-scanner-cpu --console --noconfirm depth_scanner_gui.py
+        run: >
+          pyinstaller --onefile
+          --name depth-scanner-cpu
+          --console
+          --noconfirm
+          --hidden-import tkinterdnd2
+          depth_scanner_gui.py
+
       - name: Build CLI exe (CPU)
-        run: pyinstaller --onefile --name depth-scanner-cli-cpu --console --noconfirm depth_scanner.py
+        run: >
+          pyinstaller --onefile
+          --name depth-scanner-cli-cpu
+          --console
+          --noconfirm
+          depth_scanner.py
+
       - uses: actions/upload-artifact@v4
         with:
           name: depth-scanner-cpu
@@ -37,19 +53,35 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
       - name: Install GPU deps (CUDA 12.1)
         run: |
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
           pip install diffusers transformers accelerate opencv-python-headless Pillow tqdm tkinterdnd2
           pip install pyinstaller
+
       - name: Build GUI exe (GPU)
-        run: pyinstaller --onefile --name depth-scanner-gpu --console --noconfirm depth_scanner_gui.py
+        run: >
+          pyinstaller --onefile
+          --name depth-scanner-gpu
+          --console
+          --noconfirm
+          --hidden-import tkinterdnd2
+          depth_scanner_gui.py
+
       - name: Build CLI exe (GPU)
-        run: pyinstaller --onefile --name depth-scanner-cli-gpu --console --noconfirm depth_scanner.py
+        run: >
+          pyinstaller --onefile
+          --name depth-scanner-cli-gpu
+          --console
+          --noconfirm
+          depth_scanner.py
+
       - uses: actions/upload-artifact@v4
         with:
           name: depth-scanner-gpu
@@ -60,23 +92,30 @@ jobs:
   release:
     needs: [build-cpu, build-gpu]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    # 태그 push 또는 수동 실행 시 릴리즈 생성
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/download-artifact@v4
+
+      - name: List downloaded artifacts
+        run: ls -R
+
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'Latest Build' }}
           files: |
             depth-scanner-cpu/depth-scanner-cpu.exe
             depth-scanner-cpu/depth-scanner-cli-cpu.exe
             depth-scanner-gpu/depth-scanner-gpu.exe
             depth-scanner-gpu/depth-scanner-cli-gpu.exe
           body: |
-            ## Depth Scanner ${{ github.ref_name }}
-            
-            ### GPU (NVIDIA CUDA) - recommended
-            - depth-scanner-gpu.exe (GUI)
-            - depth-scanner-cli-gpu.exe (CLI)
-            
-            ### CPU (no GPU needed)
-            - depth-scanner-cpu.exe (GUI)
-            - depth-scanner-cli-cpu.exe (CLI)
+            ## Depth Scanner ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '(latest build)' }}
+
+            ### GPU (NVIDIA CUDA) — 권장
+            - `depth-scanner-gpu.exe` (GUI)
+            - `depth-scanner-cli-gpu.exe` (CLI)
+
+            ### CPU (GPU 없어도 실행 가능)
+            - `depth-scanner-cpu.exe` (GUI)
+            - `depth-scanner-cli-cpu.exe` (CLI)
