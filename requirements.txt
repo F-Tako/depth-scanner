@@ -5,3 +5,4 @@ accelerate
 opencv-python
 Pillow
 tqdm
+tkinterdnd2
