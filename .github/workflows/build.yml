@@ -9,57 +9,74 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build-cpu:
     runs-on: windows-latest
-    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
-      - name: Install dependencies (CPU only)
+      - name: Install CPU deps
         run: |
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install diffusers transformers accelerate opencv-python-headless Pillow tqdm tkinterdnd2
           pip install pyinstaller
-
-      - name: Build GUI exe
-        run: |
-          pyinstaller --onefile --name depth-scanner --console --noconfirm depth_scanner_gui.py
-
-      - name: Build CLI exe
-        run: |
-          pyinstaller --onefile --name depth-scanner-cli --console --noconfirm depth_scanner.py
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Build GUI exe (CPU)
+        run: pyinstaller --onefile --name depth-scanner-cpu --console --noconfirm depth_scanner_gui.py
+      - name: Build CLI exe (CPU)
+        run: pyinstaller --onefile --name depth-scanner-cli-cpu --console --noconfirm depth_scanner.py
+      - uses: actions/upload-artifact@v4
         with:
-          name: depth-scanner-windows
+          name: depth-scanner-cpu
           path: |
-            dist/depth-scanner.exe
-            dist/depth-scanner-cli.exe
+            dist/depth-scanner-cpu.exe
+            dist/depth-scanner-cli-cpu.exe
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  build-gpu:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install GPU deps (CUDA 12.1)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+          pip install diffusers transformers accelerate opencv-python-headless Pillow tqdm tkinterdnd2
+          pip install pyinstaller
+      - name: Build GUI exe (GPU)
+        run: pyinstaller --onefile --name depth-scanner-gpu --console --noconfirm depth_scanner_gui.py
+      - name: Build CLI exe (GPU)
+        run: pyinstaller --onefile --name depth-scanner-cli-gpu --console --noconfirm depth_scanner.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: depth-scanner-gpu
+          path: |
+            dist/depth-scanner-gpu.exe
+            dist/depth-scanner-cli-gpu.exe
+
+  release:
+    needs: [build-cpu, build-gpu]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+      - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/depth-scanner.exe
-            dist/depth-scanner-cli.exe
+            depth-scanner-cpu/depth-scanner-cpu.exe
+            depth-scanner-cpu/depth-scanner-cli-cpu.exe
+            depth-scanner-gpu/depth-scanner-gpu.exe
+            depth-scanner-gpu/depth-scanner-cli-gpu.exe
           body: |
             ## Depth Scanner ${{ github.ref_name }}
             
-            ### Download
-            - depth-scanner.exe - GUI (drag and drop)
-            - depth-scanner-cli.exe - CLI (terminal)
+            ### GPU (NVIDIA CUDA) - recommended
+            - depth-scanner-gpu.exe (GUI)
+            - depth-scanner-cli-gpu.exe (CLI)
             
-            ### Note
-            - First run downloads Marigold model (~2GB)
-            - CPU version (GPU needs Python install)
-            - Supports 8K+ resolution
-            - EXR 32bit / PNG 16bit / PNG 8bit output
+            ### CPU (no GPU needed)
+            - depth-scanner-cpu.exe (GUI)
+            - depth-scanner-cli-cpu.exe (CLI)
