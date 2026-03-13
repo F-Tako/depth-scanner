@@ -1,0 +1,75 @@
+name: Build Depth Scanner
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies (CPU only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install diffusers transformers accelerate opencv-python-headless Pillow tqdm tkinterdnd2
+          pip install pyinstaller
+
+      - name: Build GUI exe
+        run: |
+          pyinstaller --onefile --name depth-scanner --console --noconfirm depth_scanner_gui.py
+
+      - name: Build CLI exe
+        run: |
+          pyinstaller --onefile --name depth-scanner-cli --console --noconfirm depth_scanner.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: depth-scanner-windows
+          path: |
+            dist/depth-scanner.exe
+            dist/depth-scanner-cli.exe
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/depth-scanner.exe
+            dist/depth-scanner-cli.exe
+          body: |
+            ## Depth Scanner ${{ github.ref_name }}
+            
+            ### 다운로드
+            - `depth-scanner.exe` — GUI 버전 (드래그앤드롭)
+            - `depth-scanner-cli.exe` — CLI 버전 (터미널용)
+            
+            ### GUI 사용법
+            1. `depth-scanner.exe` 실행
+            2. 이미지 또는 영상 파일을 드래그하거나 클릭하여 선택
+            3. Scan 버튼 클릭
+            4. 결과가 입력 파일 옆에 저장됨
+            
+            ### CLI 사용법
+            ```
+            depth-scanner-cli.exe input.mp4
+            depth-scanner-cli.exe input.mp4 --sequence
+            depth-scanner-cli.exe photo.jpg
+            ```
+            
+            ### 참고
+            - 첫 실행 시 Marigold 모델(~2GB)이 자동 다운로드됩니다
+            - CPU 버전입니다 (GPU는 Python 직접 설치 권장)
+            - 8K+ 해상도 지원
